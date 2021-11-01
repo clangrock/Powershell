@@ -1,5 +1,5 @@
-
-function trimString {
+﻿
+function FormatString {
     <#
     .SYNOPSIS
     Format a input string in a string array with the length of SLength.
@@ -32,10 +32,9 @@ function trimString {
     [bool]$firstWrite = $false
     # split the array in strings
     $sString = $inString.Split()
-    foreach ($txt in $sString){ # split strings in worde
-    # $i = ($txt | Measure-Object -Character | Select-Object -Property Characters).Characters
+    foreach ($txt in $sString){ # split strings in words
     $i = $txt.Length
-    # string zusammenbauen
+    # rebuild the string
         $y = $y+$i
         if ($y -lt ($SLength -1)) {
             $sTemp2 = $sTemp2 + $txt + ' '
@@ -99,64 +98,129 @@ function trimString {
  #foreach ($t in $result.GetEnumerator()){$t.length}
 
 function writeTable {
+        <#
+    .SYNOPSIS
+    Draw a table to a string array
+
+    .DESCRIPTION
+    Draw a table with free count of columns and rows..
+
+    .PARAMETER $tContent
+    Input as string array.
+
+    .PARAMETER $config 
+        = @{'Columns' = 2; 
+        'ColumnWidth' = 25}
+
+    .EXAMPLE
+    # table config
+    $hConfig = @{}
+    $hConfig.Add("Columns", 4)
+    $hConfig.Add("ColumnWidth", 25)
+    # table config
+    [string[]]$TableContent = "Header1; Header2; Header3; Header4;header 5"
+    $TableContent += "1655ewrrwfrwgg;2;3;4"
+    $TableContent += "123456 6787899 8875655655 ewrrwf rwg ge;6;7;8"
+    $TableContent += "16wgg;2;3;4"
+    $TableContent += "123e;6;7rrer3r3444 434343434343tt eegst5jsf uwOOEOW RRRswrett12;8"
+    # exceute draw the table
+    $resultTable = writeTable -tContent $TableContent -config $hConfig
+    # print the result 
+    foreach ($result in $resultTable.GetEnumerator()){
+        Write-Host $result
+    }
+    
+    #>
     [CmdletBinding()]
     param (
         [string[]]$tContent,
-        [hashtable]$config = @{}
+        [hashtable]$config = @{'Columns' = 2; 'ColumnWidth' = 25}
     )
     begin {
-        $SeparationLine = "-"
-        $SeparationLine = $SeparationLine.PadRight((($config.Columns * 2) +($config.Columns * $config.ColumnWidth)+1), "-" )
-        [string[]]$OutTable =$SeparationLine # first table line
+        # build the table lines
+        [string]$RowSeperator = '│ '
+        $SeparationLineTop = "┌"
+        $SeparationLineBottom = "└"
+        $SeparationLine = "├"
+        $Separation = ''
+        $Separation = $Separation.PadRight($config.ColumnWidth + 1, "─")
+
+        for ($i = 1; $i -le $config.Columns; $i++) {
+            $SeparationLine +=  $Separation
+            $SeparationLineTop +=  $Separation
+            $SeparationLineBottom +=  $Separation
+            if ($i -eq $config.Columns){
+                $SeparationLine += '┤'
+                $SeparationLineTop += '┐'
+                $SeparationLineBottom += '┘'
+            }
+            else {
+                $SeparationLine += '┼'
+                $SeparationLineTop += '┬'
+                $SeparationLineBottom += '┴'
+            }
+        }
+    
+        [string[]]$OutTable = $SeparationLineTop # first table line
+        [hashtable]$hContent = [ordered]@{}
+        [int]$iRow = 1 
     }
     process {
+        # read the content from $tContent
         foreach ($inLine in $tContent) {
             # split input string
             $arrTxt = $inLine.Split(";").Trim()
-            [string[]]$otxt_1 = trimString -inString $arrTxt[0] -SLength $config.ColumnWidth
-            [string[]]$otxt_2 = trimString -inString $arrTxt[1] -SLength $config.ColumnWidth
-            [string[]]$otxt_3 = trimString -inString $arrTxt[2] -SLength $config.ColumnWidth
-            [string[]]$otxt_4 = trimString -inString $arrTxt[3] -SLength $config.ColumnWidth
-            [array]$aLines = $otxt_1.Length
-            $aLines += $otxt_2.Length
-            $aLines += $otxt_3.Length
-            $aLines += $otxt_4.Length
-            # get max lines in row
-            [int]$maxlines = ($aLines | measure -Maximum).Maximum
-            # check if all array has the same items count
-            [int]$minLines = ($aLines | measure -Minimum).Minimum
-            If (!($minLines -eq $maxlines)){
-                # add lines to the arrays
-                for ($i = $otxt_1.Length; $i -lt $maxlines; $i++) {
-                    [string]$rtemp = " "
-                    $rtemp = $rtemp.PadRight($config.ColumnWidth, " ")
-                    $otxt_1 += $rtemp
-                }
-                for ($i = $otxt_2.Length; $i -lt $maxlines; $i++) {
-                    [string]$rtemp = " "
-                    $rtemp = $rtemp.PadRight($config.ColumnWidth, " ")
-                    $otxt_2 += $rtemp
-                }
-                for ($i = $otxt_3.Length; $i -lt $maxlines; $i++) {
-                    [string]$rtemp = " "
-                    $rtemp = $rtemp.PadRight($config.ColumnWidth, " ")
-                    $otxt_3 += $rtemp
-                }
-                for ($i = $otxt_4.Length; $i -lt $maxlines; $i++) {
-                    [string]$rtemp = " "
-                    $rtemp = $rtemp.PadRight($config.ColumnWidth, " ")
-                    $otxt_4 += $rtemp
+            If (!($arrTxt.length -eq $config.Columns )){
+                Write-Host "Mismatch Input text and Columns"
+                If ($arrTxt.length -lt $config.Columns){
+                    for ($i = $arrTxt.length; $i -lt $config.Columns; $i++) {
+                        $arrTxt += " "
+                    }
                 }
             }
+        
+            [int]$iColumn = 1
+            [hashtable] $Column = [ordered]@{}
+            foreach ($otext in $arrTxt.GetEnumerator()){
+                If ($otext.length -gt 0){
+                    if ($config.Columns -ge $iColumn){
+                        [string[]]$otxt_x = Formatstring -inString $otext -SLength $config.ColumnWidth   # format the strings to columns width 
+                    }      
+                }   
+                else {
+                    [string[]]$otxt_x = " "
+                }
+                if ($config.Columns -ge $iColumn){               
+                    $Column.Add("Column_"+$iColumn,$otxt_x)
+                }
+                $iColumn += 1   
+            }
+            $hContent.Add("Rows_" + $iRow,$Column)
+            $iRow += 1
+        }
 
-            for ($i = 0; $i -lt $maxlines; $i++) {
-                [string]$stemp = '| ' + $otxt_1[$i] + '| ' + $otxt_2[$i] +'| ' + $otxt_3[$i] +'| ' + $otxt_4[$i] + '|'
-                $OutTable += $stemp
+        foreach ($RowKeys in $hContent.Keys | Sort-Object){
+            [array]$Columnkeys = $hContent[$Rowkeys].Keys | Sort-Object # get a list with ordered columns keys
+            $oRow = $hContent[$RowKeys]
+            [int]$RowNumber = 0
+            foreach ($oColumn in $Columnkeys.GetEnumerator()) {
+                [string[]]$tRow = $oRow[$oColumn]
+                If ($tRow.Length -gt $RowNumber){
+                    $RowNumber = $tRow.Length
+                }
             }
-           # [string]$stemp = '| ' + $otxt_1[1] + '| ' + $otxt_2[1] +'| ' + $otxt_3[1] +'| ' + $otxt_4[1] + '|'
-           # $OutTable += $stemp
+            # write the output
+            for ($i = 0; $i -lt $RowNumber; $i++) {
+                [string] $out =''
+                for ($y = 0; $y -lt $Columnkeys.Length; $y++) {
+                    $out += ($RowSeperator + $oRow[$Columnkeys[$y]][$i]).PadRight($config.ColumnWidth +2 ," ")
+                }
+                $out += $RowSeperator
+                $OutTable += $out
+            }
             $OutTable += $SeparationLine
         }
+        $OutTable[-1] = $SeparationLineBottom # write the last table line
     }
     end {
         Return $OutTable
@@ -164,15 +228,19 @@ function writeTable {
 }
 
 $hConfig = @{}
-$hConfig.Add("Columns", 4)
+$hConfig.Add("Columns", 1)
 $hConfig.Add("ColumnWidth", 25)
 
-[string[]]$TableContent = "Header1; Header2; Header3; Header4"
-$TableContent += "1655ewrrwfrwgg;2;3;4 "
-$TableContent += "123456 6787899 8875655655 ewrrwf rwg ge;6;7;8 "
-$TableContent += "16wgg;2;3;4 "
-$TableContent += "123e;6;7rrer3r3444 434343434343tt eegst5jsf uwOOEOW RRRswrett12;8 "
+[string[]]$TableContent = "Header1; Header2; Header3; Header4;header 5"
+$TableContent += "1655ewrrwfrwgg;2;3;4"
+$TableContent += "123456 6787899 8875655655 ewrrwf rwg ge;6;7;8"
+$TableContent += "16wgg;2;3;4"
+$TableContent += "123e;6;7rrer3r3444 434343434343tt eegst5jsf uwOOEOW RRRswrett12;8"
 
 $resultTable = writeTable -tContent $TableContent -config $hConfig
 
-Write-Host $resultTable
+
+foreach ($result in $resultTable.GetEnumerator()){
+    Write-Host $result
+}
+
