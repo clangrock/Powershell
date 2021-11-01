@@ -13,10 +13,24 @@ function FormatString {
     .PARAMETER SLength
     Max length of string per line
 
+        .INPUTS
+        System.String
+        System.Int32
+
+    .OUTPUTS
+        System.string[] 
+
+    .NOTES
+        Author:    Christian Langrock
+        Company:   Actemium Controlmatic Mitte GmbH
+        Contact:   Christian.Langrock@Actemium.de
+        Version:   1.0
+        Date:      2021-Nov-01
+
     .EXAMPLE
     [string]$stext = "LangerStringmitnochmehrtext, und 5noch mehrBydefault,stringcomparisonsarecase-insensitive. The equality operators have explicit case-sensitive and case-insensitive forms. To make a comparison operator case-sensitive, add a c after the -. For example, -ceq is the case-sensitive version of -eq. To make the case-insensitivity explicit, add an i after -. For example, -ieq is the explicitly case-insensitive version of -eq."
     # start function
-    $result = trimString -inString $stext -SLength 30
+    $result = FormatString -inString $stext -SLength 20
     #>
 
     param (
@@ -33,8 +47,8 @@ function FormatString {
     # split the array in strings
     $sString = $inString.Split()
     foreach ($txt in $sString){ # split strings in words
-    $i = $txt.Length
-    # rebuild the string
+        $i = $txt.Length
+        # rebuild the string
         $y = $y+$i
         if ($y -lt ($SLength -1)) {
             $sTemp2 = $sTemp2 + $txt + ' '
@@ -47,10 +61,12 @@ function FormatString {
                 if (!$firstWrite){
                     $sOut = $sTemp2.PadRight($SLength, ' ')
                     $firstWrite = $true
+                    $y = $i
                 }
                 else {
                     $sOut += $sTemp2.PadRight($SLength, ' ')
                     $writeExe = $true
+                    $y = $i
                 }
             }
             If ($i -ge $SLength) { # check if the string is lomger than
@@ -69,9 +85,10 @@ function FormatString {
                         $txt = ''
                     }
                 } while ($txt.Length -ge 1)
+                $y = 0
             }
             $sTemp2 = $txt + ' '
-            $y = $i
+            #$y = $i
             $writeExe = $true
         }
     }
@@ -90,8 +107,8 @@ function FormatString {
 }
 
 
-function writeTable {
-        <#
+function drawTable{
+    <#
     .SYNOPSIS
     Draw a table to a string array
 
@@ -102,8 +119,22 @@ function writeTable {
     Input as string array.
 
     .PARAMETER $config 
-        = @{'Columns' = 2; 
-        'ColumnWidth' = 25}
+    = @{'Columns' = 2; 
+    'ColumnWidth' = 25}
+
+    .INPUTS
+        System.string[] 
+        System.Hashtable
+
+    .OUTPUTS
+        System.string[] 
+
+    .NOTES
+        Author:    Christian Langrock
+        Company:   Actemium Controlmatic Mitte GmbH
+        Contact:   Christian.Langrock@Actemium.de
+        Version:   1.0
+        Date:      2021-Nov-01
 
     .EXAMPLE
     # table config
@@ -117,17 +148,18 @@ function writeTable {
     $TableContent += "16wgg;2;3;4"
     $TableContent += "123e;6;7rrer3r3444 434343434343tt eegst5jsf uwOOEOW RRRswrett12;8"
     # exceute draw the table
-    $resultTable = writeTable -tContent $TableContent -config $hConfig
+    $resultTable = drawTable -tContent $TableContent -config $hConfig
     # print the result 
     foreach ($result in $resultTable.GetEnumerator()){
         Write-Host $result
     }
     
+
     #>
     [CmdletBinding()]
     param (
         [string[]]$tContent,
-        [hashtable]$config = @{'Columns' = 2; 'ColumnWidth' = 25}
+        [hashtable]$config = @{'Columns' = 2; 'ColumnWidth' = "25;25";}
     )
     begin {
         # build the table lines
@@ -135,22 +167,33 @@ function writeTable {
         $SeparationLineTop = "┌"
         $SeparationLineBottom = "└"
         $SeparationLine = "├"
-        $Separation = ''
-        $Separation = $Separation.PadRight($config.ColumnWidth + 1, "─")
 
-        for ($i = 1; $i -le $config.Columns; $i++) {
+        [int32[]]$ColumnWidth = ($config.ColumnWidth).Split(';')
+        if ($ColumnWidth.Length -lt $config.Columns){   # check if config width is not correct
+            [string]$temp = $config.ColumnWidth
+                if (!$temp.EndsWith(';')){
+                    $temp += ';'
+                }
+            for ($i = 0; $i -lt $config.Columns; $i++) {
+                $temp += "20;"
+            }
+            [int32[]]$ColumnWidth = $temp.Split(';')
+        }
+        for ($i = 0; $i -lt $config.Columns; $i++) {
+            [string]$Separation = ''
+            $Separation = $Separation.PadRight($ColumnWidth[$i] + 1, "─")
             $SeparationLine +=  $Separation
             $SeparationLineTop +=  $Separation
             $SeparationLineBottom +=  $Separation
-            if ($i -eq $config.Columns){
-                $SeparationLine += '┤'
-                $SeparationLineTop += '┐'
-                $SeparationLineBottom += '┘'
-            }
-            else {
+            if ($i -lt $config.Columns - 1){
                 $SeparationLine += '┼'
                 $SeparationLineTop += '┬'
                 $SeparationLineBottom += '┴'
+            }
+            else {
+                $SeparationLine += '┤'
+                $SeparationLineTop += '┐'
+                $SeparationLineBottom += '┘'
             }
         }
     
@@ -177,7 +220,7 @@ function writeTable {
             foreach ($otext in $arrTxt.GetEnumerator()){
                 If ($otext.length -gt 0){
                     if ($config.Columns -ge $iColumn){
-                        [string[]]$otxt_x = Formatstring -inString $otext -SLength $config.ColumnWidth   # format the strings to columns width 
+                        [string[]]$otxt_x = Formatstring -inString $otext -SLength $ColumnWidth[$iColumn-1]   # format the strings to columns width
                     }      
                 }   
                 else {
@@ -206,7 +249,7 @@ function writeTable {
             for ($i = 0; $i -lt $RowNumber; $i++) {
                 [string] $out =''
                 for ($y = 0; $y -lt $Columnkeys.Length; $y++) {
-                    $out += ($RowSeperator + $oRow[$Columnkeys[$y]][$i]).PadRight($config.ColumnWidth +2 ," ")
+                    $out += ($RowSeperator + $oRow[$Columnkeys[$y]][$i]).PadRight($ColumnWidth[$y] +2 ," ")
                 }
                 $out += $RowSeperator
                 $OutTable += $out
@@ -219,5 +262,4 @@ function writeTable {
         Return $OutTable
     }
 }
-
 
