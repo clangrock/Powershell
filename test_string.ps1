@@ -89,13 +89,6 @@ function FormatString {
     return $sOut
 }
 
- #[string]$stext = "LangerStringmitnochmehrtext, und 5noch mehrBydefault,stringcomparisonsarecase-insensitive. The equality operators have explicit case-sensitive and case-insensitive forms. To make a comparison operator case-sensitive, add a c after the -. For example, -ceq is the case-sensitive version of -eq. To make the case-insensitivity explicit, add an i after -. For example, -ieq is the explicitly case-insensitive version of -eq."
-# start function
- #$result = trimString -inString $stext -SLength 30
-
- #foreach ($t in $result.GetEnumerator()){Write-host $t}
-
- #foreach ($t in $result.GetEnumerator()){$t.length}
 
 function writeTable {
         <#
@@ -227,20 +220,4 @@ function writeTable {
     }
 }
 
-$hConfig = @{}
-$hConfig.Add("Columns", 1)
-$hConfig.Add("ColumnWidth", 25)
-
-[string[]]$TableContent = "Header1; Header2; Header3; Header4;header 5"
-$TableContent += "1655ewrrwfrwgg;2;3;4"
-$TableContent += "123456 6787899 8875655655 ewrrwf rwg ge;6;7;8"
-$TableContent += "16wgg;2;3;4"
-$TableContent += "123e;6;7rrer3r3444 434343434343tt eegst5jsf uwOOEOW RRRswrett12;8"
-
-$resultTable = writeTable -tContent $TableContent -config $hConfig
-
-
-foreach ($result in $resultTable.GetEnumerator()){
-    Write-Host $result
-}
 
