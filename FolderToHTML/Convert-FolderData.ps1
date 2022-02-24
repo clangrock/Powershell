@@ -1,24 +1,33 @@
-#Script Version
-$sScriptVersion = "0.01"
+# Script Version
+# $sScriptVersion = "0.02"
 
 #Set Error Action to Silently Continue
 $ErrorActionPreference =  "SilentlyContinue"
 
+# define functions 
+$fFunction1 = join-Path $scriptFolder "openFolder.ps1"
+
+#load powershell functions
+."$fFunction1"
+
 # define script folder
 $scriptFolder = $PSScriptRoot
-# $sFunctionFolder = Join-Path $scriptFolder "functions"
-
-#Variables that need to be set for each run
-$startFolder = 'D:\PALL_Projekte\@releases\MDF\' #The starting folder to analyze
 
 # The html source template file
 $sHtmlTemplate = 'HTMLTemplate.html'
 $sourceHTMLFile = Join-Path -Path $scriptFolder -ChildPath $sHtmlTemplate
 
+# select folder
+#The starting folder to analyze
+$startFolder = Get-SHDOpenFolderDialog -Title "Select the root folder for the Table of Contents"
+
+
 # define the output file
 # The final html file that will be produced, #does not need to exist
-$OutputFileName ="Start.html"
-$destinationHTMLFile = Join-Path -Path $scriptFolder -ChildPath $OutputFileName
+$OutputFileName ="TableOfContent.html"
+$destinationHTMLFile = Join-Path -Path $startFolder -ChildPath $OutputFileName
+
+
 
 $htmlLines = @()
 
@@ -29,7 +38,7 @@ function CreateFileDetailRecord{
     
     process{
         # read file data
-        $files = Get-ChildItem -Path $FilePath -File| Select-Object Name,LastWriteTime 
+        $files = Get-ChildItem -Path $FilePath -File | Select-Object Name,LastWriteTime,Fullname,Length  
         # get hash and print the result to logfile
         $newFIleRecord = New-Object -TypeName PSObject 
     
@@ -37,9 +46,33 @@ function CreateFileDetailRecord{
         $shash = $hash.Hash
         $Filename = $files.Name
         $WriteTime = $files.LastWriteTime
+        $FullFileName = $files.Fullname
+        $Size = $files.Length
+
+        #Determine units for a more friendly output
+    if(($Size / 1GB) -ge 1){
+        [string]$units = "GB"
+        $fileSize = [math]::Round(($Size / 1GB),2)
+    }
+    else
+    {
+        if(($Size / 1MB) -ge 1){
+            $units = "MB"
+            $fileSize = [math]::Round(($Size / 1MB),2)
+        }
+        else{
+            $units = "KB"
+            $fileSize = [math]::Round(($Size / 1KB),2)
+        }
+    }
+
         $newFIleRecord | Add-Member -MemberType NoteProperty -Name FileName -Value $Filename
         $newFIleRecord | Add-Member -MemberType NoteProperty -Name LastWriteTime -Value $WriteTime
         $newFIleRecord | Add-Member -MemberType NoteProperty -Name Hash -Value $shash
+        $newFIleRecord | Add-Member -MemberType NoteProperty -Name Fullname -Value $FullFileName
+        $newFIleRecord | Add-Member -MemberType NoteProperty -Name Size -Value $fileSize
+        $newFIleRecord | Add-Member -MemberType NoteProperty -Name Units -Value $units
+        
     }
     end{
         return $newFIleRecord;
@@ -93,6 +126,36 @@ function CreateFolderDetailRecord{
     }
 }
 
+function Convert-FileDataToHTML {
+    [CmdletBinding()]
+    param (
+        [string]$FilePath
+    )
+    
+    begin {
+        # Read file data
+        $dataFile = CreateFileDetailRecord -FilePath $FilePath
+    }
+    
+    process {
+        [DateTime]$date = $dataFile.LastWriteTime 
+        [string]$dateFormat = $date.tostring("dd-MMM-yyyy hh.mm.ss")
+        $FileLink = Resolve-Path -Path $dataFile.Fullname -Relative
+        # convert to HTML link
+        $FileLink = $FileLink.Replace("\","/").Replace(" ", "%20")
+        $HTMLOutput = '<li><span style="color:darkblue"><a href="'+ $FileLink +'">' + $($dataFile.FileName) + '</a></span>' + "`n" +
+            '<ul>' + "`n" +
+                '<li> &ensp; [<span style="color:grey"> Last Write Date: </span>] &ensp; (<span style="color:blue">' + $dateFormat + '</span>)</li>' + 
+                '<li> &ensp; [<span style="color:grey"> File Size: </span>] &emsp; &emsp; &emsp;(<span style="color:blue">' + $($dataFile.Size) +' ' + $($dataFile.Units) + '</span>)</li>' + 
+                '<li> &ensp; [<span style="color:grey"> File Hash: </span>] &emsp; &emsp; &ensp; (<span style="color:blue">' + $($dataFile.Hash) + '</span>)</li>' + 
+            '</ul>' + "`n" +
+        '</li>' + "`n"    
+    }
+    
+    end {
+        Return $HTMLOutput
+    }
+}
 
 #Function that recursively creates the html for the output, given a starting location
 function GetAllFolderDetails
@@ -100,7 +163,7 @@ function GetAllFolderDetails
     param([string]$FolderPath)    
 
     $recursiveHTML = @()
-
+    [int]$cont = 0
     #Get properties used for processing
     $folderItem = Get-Item -Path $FolderPath
     $folderDetails = CreateFolderDetailRecord -FolderPath $FolderPath
@@ -110,20 +173,24 @@ function GetAllFolderDetails
     if($subFolders.Count -gt 0)
     {
         $recursiveHTML += '<li><span class="caret">' + $folderItem.Name + '(<span style="color:red">' + $folderDetails.FolderSizeInUnits + " " + $folderDetails.Units + '</span>)</span></li>' + "`n"
-        $recursiveHTML += '<ul class="nested">'
+        $recursiveHTML += '<li><ul class="nested">'
         #Get all file data in subfolder
-        $files = Get-ChildItem -Path $folderItem.FullName -File| Select-Object Name,FullName 
-        if ($files.Count -gt 0){
-            $recursiveHTML += '<ul class="nested">'
-            If ($files.Count -eq 1){
-                $dataFile = CreateFileDetailRecord -FilePath $files.Fullname
-                $recursiveHTML += '<li>' + $($dataFile.FileName) + ' (<span style="color:blue">' + $($dataFile.LastWriteTime) + " " + $($dataFile.Hash) + '</span>)</span></li>' + "`n"
+        $files = Get-ChildItem -Path $folderItem.FullName -File| Select-Object Name,FullName
+        $cont = ($files | Measure-Object  | Select-Object Count).Count  
+        if ($cont -gt 0){
+            $recursiveHTML += '<li><ul class="nested">'
+            #$recursiveHTML += '<li>'
+            If ($cont -eq 1){
+                $recursiveHTML += Convert-FileDataToHTML -FilePath $files.Fullname
             }
-            foreach($file in $files.GetEnumerator()){
-                $dataFile = CreateFileDetailRecord -FilePath $file.Fullname
-                $recursiveHTML += '<li><span style="color:darkblue">' + $($dataFile.FileName) + '</span><li>[<span style="color:grey"> Last Write Date:</span>] (<span style="color:blue">' + $dataFile.LastWriteTime + '</span>)[<span style="color:grey"> File Hash: </span>](<span style="color:blue">' + $dataFile.Hash + '</span>)</li>' + "`n"
+            else {
+#                $recursiveHTML += '<li>'
+                foreach($file in $files.GetEnumerator()){
+                    $recursiveHTML += Convert-FileDataToHTML -FilePath $file.Fullname
+                }
             }
-            $recursiveHTML += '</ul>'+ "`n"
+#            $recursiveHTML += '</li>'+ "`n"
+            $recursiveHTML += '</ul></li>'+ "`n"
         }
     }
     else
@@ -132,19 +199,19 @@ function GetAllFolderDetails
         
         #Get all file data in subfolder
         $files = Get-ChildItem -Path $folderItem -File| Select-Object Name,FullName 
-        $cont = $files | Measure-Object  | Select-Object Count
-        if ($cont.Count -gt 0){
-            $recursiveHTML += '<ul class="nested">'
-            If ($cont.Count -eq 1){
-                $dataFile = CreateFileDetailRecord -FilePath $files.Fullname
-                $recursiveHTML += '<li><span style="color:darkblue">' + $($dataFile.FileName) + '</span><li>[<span style="color:grey"> Last Write Date:</span>] (<span style="color:blue">' + $($dataFile.LastWriteTime) + '</span>)[<span style="color:grey"> File Hash: </span>](<span style="color:blue">'  + $($dataFile.Hash) + '</span>)</li>' + "`n"
+        $cont = ($files | Measure-Object  | Select-Object Count).Count 
+        if ($cont -gt 0){
+            $recursiveHTML += '<li><ul class="nested">'
+            If ($cont -eq 1){
+                $recursiveHTML += Convert-FileDataToHTML -FilePath $files.Fullname
             }
-
-            foreach($file in $files.GetEnumerator()){
-                $dataFile = CreateFileDetailRecord -FilePath $file.Fullname
-                $recursiveHTML += '<li><span style="color:darkblue">' + $($dataFile.FileName) + '</span><li>[<span style="color:grey"> Last Write Date:</span>] (<span style="color:blue">' + $($dataFile.LastWriteTime) + '</span>)[<span style="color:grey"> File Hash: </span>](<span style="color:blue">' + $($dataFile.Hash) + '</span>)</li>' + "`n"
+        
+            else{
+                foreach($file in $files.GetEnumerator()){
+                    $recursiveHTML += Convert-FileDataToHTML -FilePath $file.Fullname
+                }
             }
-            $recursiveHTML += '</ul>'+ "`n"
+            $recursiveHTML += '</ul></li>'+ "`n"
         }
 
     }
@@ -168,10 +235,14 @@ function GetAllFolderDetails
 
 #Processing Starts Here
 
+Set-Location -Path $startFolder
+
+# delete the HtmlFile
+Remove-Item -Path $destinationHTMLFile
 #Opening html
 $htmlLines += '<ul id="myUL">'+ "`n"
 
-#This function call will return all of the recursive html for the startign folder and below
+#This function call will return all of the recursive html for the starting folder and below
 $htmlLines += GetAllFolderDetails -FolderPath $startFolder
 
 #Closing html
@@ -180,4 +251,4 @@ $htmlLines += '</ul>'
 #Get the html template, replace the template with generated code and write to the final html file
 $sourceHTML = Get-Content -Path $sourceHTMLFile;
 $destinationHTML = $sourceHTML.Replace('[FinalHTML]', $htmlLines)
-$destinationHTML | Set-Content $destinationHTMLFile 
+$destinationHTML | Set-Content $destinationHTMLFile -encoding utf8
