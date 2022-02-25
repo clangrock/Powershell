@@ -4,14 +4,16 @@
 #Set Error Action to Silently Continue
 $ErrorActionPreference =  "SilentlyContinue"
 
+# define script folder
+$scriptFolder = $PSScriptRoot
+#$scriptFolder = $PWD.Path 
+
+
 # define functions 
 $fFunction1 = join-Path $scriptFolder "openFolder.ps1"
 
 #load powershell functions
 ."$fFunction1"
-
-# define script folder
-$scriptFolder = $PSScriptRoot
 
 # The html source template file
 $sHtmlTemplate = 'HTMLTemplate.html'
@@ -27,7 +29,8 @@ $startFolder = Get-SHDOpenFolderDialog -Title "Select the root folder for the Ta
 $OutputFileName ="TableOfContent.html"
 $destinationHTMLFile = Join-Path -Path $startFolder -ChildPath $OutputFileName
 
-
+# define image folder
+$imageSourceFolder = Join-Path -Path $scriptFolder -ChildPath '.images'
 
 $htmlLines = @()
 
@@ -158,8 +161,7 @@ function Convert-FileDataToHTML {
 }
 
 #Function that recursively creates the html for the output, given a starting location
-function GetAllFolderDetails
-{
+function GetAllFolderDetails{
     param([string]$FolderPath)    
 
     $recursiveHTML = @()
@@ -179,17 +181,14 @@ function GetAllFolderDetails
         $cont = ($files | Measure-Object  | Select-Object Count).Count  
         if ($cont -gt 0){
             $recursiveHTML += '<li><ul class="nested">'
-            #$recursiveHTML += '<li>'
             If ($cont -eq 1){
                 $recursiveHTML += Convert-FileDataToHTML -FilePath $files.Fullname
             }
             else {
-#                $recursiveHTML += '<li>'
                 foreach($file in $files.GetEnumerator()){
                     $recursiveHTML += Convert-FileDataToHTML -FilePath $file.Fullname
                 }
             }
-#            $recursiveHTML += '</li>'+ "`n"
             $recursiveHTML += '</ul></li>'+ "`n"
         }
     }
@@ -226,10 +225,7 @@ function GetAllFolderDetails
     if($subFolders.Count -gt 0)
     {
         $recursiveHTML += '</ul>' + "`n"
-    }
-
-    # $recursiveHTML += '</li>'+ "`n"
-    
+    } 
     return $recursiveHTML
 }
 
@@ -238,7 +234,8 @@ function GetAllFolderDetails
 Set-Location -Path $startFolder
 
 # delete the HtmlFile
-Remove-Item -Path $destinationHTMLFile
+Remove-Item -Path $destinationHTMLFile -Force
+Remove-Item -Path .\.images\ -Force -Recurse
 #Opening html
 $htmlLines += '<ul id="myUL">'+ "`n"
 
@@ -248,7 +245,18 @@ $htmlLines += GetAllFolderDetails -FolderPath $startFolder
 #Closing html
 $htmlLines += '</ul>'
 
+# get date
+$DateNow = Get-Date
+$creationDate = $DateNow.tostring("dd-MMM-yyyy")
+
 #Get the html template, replace the template with generated code and write to the final html file
 $sourceHTML = Get-Content -Path $sourceHTMLFile;
-$destinationHTML = $sourceHTML.Replace('[FinalHTML]', $htmlLines)
+#$destinationHTML = $sourceHTML.Replace('[CreationDateHTML]', $creationDate) 
+$destinationHTML = $sourceHTML.Replace('[FinalHTML]', $htmlLines).Replace('[CreationDateHTML]', $creationDate) 
 $destinationHTML | Set-Content $destinationHTMLFile -encoding utf8
+
+# copy image folder to destination
+Copy-Item -Path $imageSourceFolder -Destination $startFolder -Recurse -Force
+Set-ItemProperty .\.images\ Attributes -Value "Hidden"
+
+Start-Process ((Resolve-Path "$destinationHTMLFile").Path)
